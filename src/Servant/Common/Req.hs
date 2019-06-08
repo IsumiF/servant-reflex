@@ -18,7 +18,9 @@ import           Control.Monad              (join)
 import           Control.Monad.IO.Class     (MonadIO, liftIO)
 import           Data.Bifunctor             (first)
 import qualified Data.ByteString.Builder    as Builder
+import qualified Data.ByteString.Base64     as Base64
 import qualified Data.ByteString.Lazy.Char8 as BL
+import           Data.ByteString            (ByteString)
 import qualified Data.Map                   as Map
 import           Data.Maybe                 (catMaybes, fromMaybe)
 import           Data.Functor.Compose
@@ -37,6 +39,7 @@ import           Servant.API.ContentTypes   (MimeUnrender(..), NoContent(..))
 import           Web.HttpApiData            (ToHttpApiData(..))
 -------------------------------------------------------------------------------
 import           Servant.API.BasicAuth
+
 
 
 ------------------------------------------------------------------------------
@@ -254,7 +257,9 @@ reqToReflexRequest reqMeth reqHost req =
       mkAuth Nothing r  = r
       mkAuth (Just (BasicAuthData u p)) (Right config) = Right $ config
         { _xhrRequestConfig_user     = Just $ TE.decodeUtf8 u
-        , _xhrRequestConfig_password = Just $ TE.decodeUtf8 p}
+        , _xhrRequestConfig_password = Just $ TE.decodeUtf8 p
+        , _xhrRequestConfig_headers = Map.insert "Authorization" (encodeBasicAuthData u p) (_xhrRequestConfig_headers config)
+        }
 
       addAuth :: Dynamic t (Either Text (XhrRequestConfig x))
               -> Dynamic t (Either Text (XhrRequestConfig x))
@@ -265,6 +270,9 @@ reqToReflexRequest reqMeth reqHost req =
       xhrReq = (liftA2 . liftA2) (\p opt -> XhrRequest reqMeth p opt) xhrUrl (addAuth xhrOpts)
 
   in xhrReq
+
+encodeBasicAuthData :: ByteString -> ByteString -> Text
+encodeBasicAuthData u p = "Basic " <> (TE.decodeUtf8 . Base64.encode $ u <> ":" <> p)
 
 -- * performing requests
 
