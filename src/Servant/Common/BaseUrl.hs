@@ -1,10 +1,8 @@
 {-# LANGUAGE ConstraintKinds     #-}
-{-# LANGUAGE DeriveDataTypeable  #-}
 {-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ViewPatterns        #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Servant.Common.BaseUrl (
@@ -19,12 +17,12 @@ module Servant.Common.BaseUrl (
   , SupportsServantReflex
 ) where
 
-import           Control.Monad (join)
--- import           Control.Monad.IO.Class (MonadIO)
-import           Control.Monad.Fix (MonadFix)
-import           Data.Monoid ((<>))
-import           Data.Text (Text)
-import qualified Data.Text as T
+import           Control.Monad                     (join)
+import           Data.Aeson
+import           Control.Monad.Fix                 (MonadFix)
+import           Data.Monoid                       ((<>))
+import           Data.Text                         (Text)
+import qualified Data.Text                         as T
 import           GHC.Generics
 import           Language.Javascript.JSaddle.Monad (MonadJSM)
 import           Reflex
@@ -46,13 +44,39 @@ data BaseUrl = BaseFullUrl Scheme Text Int Text
              | BasePath Text
   deriving (Ord, Read, Show, Generic)
 
-
 instance Eq BaseUrl where
     BasePath s == BasePath s' = s == s'
     BaseFullUrl a b c path == BaseFullUrl a' b' c' path'
         = a == a' && b == b' && c == c' && s path == s path'
         where s x = if T.isPrefixOf "/" x then T.tail x else x
     _ == _ = False
+
+instance FromJSON BaseUrl where
+  parseJSON = withText "Servant.Reflex.BaseUrl" $ \t ->
+    case parseBaseUrl t of
+      Left msg -> fail (T.unpack msg)
+      Right v  -> pure v
+
+parseBaseUrl :: Text -> Either Text BaseUrl
+parseBaseUrl str =
+    case T.stripPrefix "http://" str of
+      Just suffix -> parseBaseFullUrl Http suffix
+      Nothing ->
+        case T.stripPrefix "https://" str of
+          Just suffix -> parseBaseFullUrl Https suffix
+          Nothing     -> Right (BasePath str)
+
+parseBaseFullUrl :: Scheme -> Text -> Either Text BaseUrl
+parseBaseFullUrl scheme str =
+    if T.null portAndPath
+    then Left "port must be specified"
+    else case port' of
+      Nothing -> Left "port must be valid Int"
+      Just p  -> Right $ BaseFullUrl scheme host p path
+  where
+    (host, portAndPath) = T.breakOn ":" str
+    (port, path) = T.breakOn "/" (T.drop 1 portAndPath)
+    port' = readMaybe (T.unpack port)
 
 showBaseUrl :: BaseUrl -> Text
 showBaseUrl (BasePath s) = s
@@ -64,9 +88,9 @@ showBaseUrl (BaseFullUrl urlscheme host port path) =
         Http  -> "http:"
         Https -> "https:"
       portString = case (urlscheme, port) of
-        (Http, 80) -> ""
+        (Http, 80)   -> ""
         (Https, 443) -> ""
-        _ -> ":" <> T.pack (show port)
+        _            -> ":" <> T.pack (show port)
 
 baseUrlWidget :: forall t m .(SupportsServantReflex t m,
                               DomBuilderSpace m ~ GhcjsDomSpace,

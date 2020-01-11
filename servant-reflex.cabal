@@ -25,6 +25,7 @@ library
   hs-source-dirs: src
   build-depends:
     base                >= 4.8  && < 5,
+    aeson               >= 1.4.1.0 && < 1.5,
     bytestring          >= 0.10 && < 0.11,
     case-insensitive    >= 1.2.0.4 && < 1.3,
     containers          >= 0.6 && <0.7,
@@ -60,3 +61,19 @@ executable example
   main-is: Example.hs
   other-modules: API
   hs-source-dirs: exec
+
+test-suite unit
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Spec.hs
+  other-modules:
+      Servant.Common.BaseUrlSpec
+  build-tool-depends:
+      hspec-discover:hspec-discover
+  build-depends:
+      base >= 4.8 && < 5
+    , aeson
+    , servant-reflex
+    , hspec
+    , QuickCheck
+  default-language: Haskell2010
